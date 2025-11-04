@@ -27,7 +27,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-var todoItems = app.MapGroup("/todo-items");
+RouteGroupBuilder todoItems = app.MapGroup("/todo-items");
 
 todoItems.MapGet("/", GetAllTodos);
 todoItems.MapGet("/complete", GetCompleteTodos);
@@ -39,38 +39,45 @@ todoItems.MapDelete("/{id}", DeleteTodo);
 app.Run();
 static async Task<IResult> GetAllTodos(TodoDb db)
 {
-    return TypedResults.Ok(await db.Todos.ToListAsync());
+    return TypedResults.Ok(await db.Todos.Select(x => new TodoItemDTO(x)).ToArrayAsync());
 }
 
-static async Task<IResult> GetCompleteTodos(TodoDb db)
-{
-    return TypedResults.Ok(await db.Todos.Where(t => t.IsComplete).ToListAsync());
+static async Task<IResult> GetCompleteTodos(TodoDb db) {
+    return TypedResults.Ok(await db.Todos.Where(t => t.IsComplete).Select(x => new TodoItemDTO(x)).ToListAsync());
 }
 
 static async Task<IResult> GetTodo(int id, TodoDb db)
 {
     return await db.Todos.FindAsync(id)
         is Todo todo
-        ? TypedResults.Ok(todo)
-        : TypedResults.NotFound();
+            ? TypedResults.Ok(new TodoItemDTO(todo))
+            : TypedResults.NotFound();
 }
 
-static async Task<IResult> CreateTodo(Todo todo, TodoDb db)
+static async Task<IResult> CreateTodo(TodoItemDTO todoItemDto, TodoDb db)
 {
-    db.Todos.Add(todo);
+    var todoItem = new Todo
+    {
+        IsComplete = todoItemDto.IsComplete,
+        Name = todoItemDto.Name
+    };
+
+    db.Todos.Add(todoItem);
     await db.SaveChangesAsync();
 
-    return TypedResults.Created($"/todoitems/{todo.Id}", todo);
+    todoItemDto = new TodoItemDTO(todoItem);
+
+    return TypedResults.Created($"/todo-items/{todoItem.Id}", todoItemDto);
 }
 
-static async Task<IResult> UpdateTodo(int id, Todo inputTodo, TodoDb db)
+static async Task<IResult> UpdateTodo(int id, TodoItemDTO todoItemDto, TodoDb db)
 {
     var todo = await db.Todos.FindAsync(id);
 
     if (todo is null) return TypedResults.NotFound();
 
-    todo.Name = inputTodo.Name;
-    todo.IsComplete = inputTodo.IsComplete;
+    todo.Name = todoItemDto.Name;
+    todo.IsComplete = todoItemDto.IsComplete;
 
     await db.SaveChangesAsync();
 
